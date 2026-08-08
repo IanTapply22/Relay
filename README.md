@@ -93,7 +93,7 @@ Handlers run on a bounded dispatch executor. One handler failure is isolated fro
 
 ## Operations
 
-`/relay status`, `/relay subscriptions`, and `/relay diagnostics` require `relay.admin`. On Paper, the command is registered from the plugin bootstrapper through `LifecycleEvents.COMMANDS`, so registration follows Paper's reloadable lifecycle. Diagnostics expose published, received, rejected, handler-failure, reconnect, connectivity, and queue metrics without logging payload contents.
+`/relay status`, `/relay subscriptions`, and `/relay diagnostics` require `relay.admin`. On Paper, the active service builds a literal command tree and registers it from `JavaPlugin#getLifecycleManager()` through `LifecycleEvents.COMMANDS`, matching Orchestra's command registration pattern. Diagnostics expose published, received, rejected, handler-failure, reconnect, connectivity, and queue metrics without logging payload contents.
 
 The corresponding metric names are:
 

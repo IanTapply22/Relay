@@ -12,8 +12,8 @@ dependencies {
 }
 
 paperPluginYaml {
+    name = "Relay"
     main = "com.iantapply.relay.Relay"
-    bootstrapper = "com.iantapply.relay.RelayBootstrap"
     apiVersion = "26.2"
     authors.add("Gucci Fox")
     prefix = "Relay"
