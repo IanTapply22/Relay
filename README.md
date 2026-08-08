@@ -12,9 +12,11 @@ Relay requires Java 25 for the configured Paper 26.2 development bundle.
 ./gradlew clean test jar
 ```
 
-The combined plugin is written to `relay-distribution/build/libs/Relay-1.0.0.jar`.
+The combined plugin is written to `modules/relay-distribution/build/libs/Relay-<version>.jar`.
 
 ## Modules
+
+All modules live under the `modules/` directory while retaining their short Gradle paths, such as `:relay-api` and `:relay-distribution`.
 
 - `relay-api`: separately publishable developer API and standard codecs.
 - `relay-core`: envelopes, routing, validation, dispatch isolation, in-memory transport, and metrics.
