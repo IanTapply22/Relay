@@ -1,0 +1,15 @@
+node:
+  id: "velocity-1"
+  role: "velocity"
+
+redis:
+  uri: "redis://localhost:6379"
+  uri-environment-variable: "RELAY_REDIS_URI"
+  uri-file: ""
+  namespace: "production"
+
+messaging:
+  maximum-payload-bytes: 65536
+  dispatch-workers: 2
+  dispatch-queue-capacity: 1024
+  reject-messages-older-than-seconds: 60

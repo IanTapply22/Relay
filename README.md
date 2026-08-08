@@ -1,0 +1,108 @@
+# Relay
+
+Relay is a small, typed Redis Pub/Sub messaging layer for Paper and Velocity networks. The same distribution JAR is loadable by both platforms and supports broadcast, role-targeted, and node-targeted delivery.
+
+Relay deliberately provides transient notifications and commands, not durable application state. A successful publish means Redis accepted the message. Nodes that are disconnected miss messages, and handlers should be idempotent. Store authoritative party/player state elsewhere and use Relay to announce that it changed.
+
+## Build
+
+Relay requires Java 25 for the configured Paper 26.2 development bundle.
+
+```text
+./gradlew clean test jar
+```
+
+The combined plugin is written to `relay-distribution/build/libs/Relay-1.0.0.jar`.
+
+## Modules
+
+- `relay-api`: separately publishable developer API and standard codecs.
+- `relay-core`: envelopes, routing, validation, dispatch isolation, in-memory transport, and metrics.
+- `relay-redis`: Redis publisher, reconnecting subscriptions, TLS, authentication, and health state.
+- `relay-platform-paper`: Paper lifecycle, Bukkit service registration, configuration, and administration command.
+- `relay-platform-velocity`: Velocity lifecycle, service exposure, configuration, and administration command.
+- `relay-distribution`: combined Paper/Velocity plugin JAR with runtime dependencies.
+
+Publish the API to the local Maven repository for consumer development with:
+
+```text
+./gradlew :relay-api:publishToMavenLocal
+```
+
+## Configuration
+
+Paper creates `plugins/Relay/config.yml`; Velocity creates `plugins/relay/config.yml` from its Velocity-specific default. Both use the same fields:
+
+```yaml
+node:
+  id: "survival-1"
+  role: "paper" # paper or velocity
+
+redis:
+  uri: "redis://localhost:6379"
+  uri-environment-variable: "RELAY_REDIS_URI"
+  uri-file: ""
+  namespace: "production"
+
+messaging:
+  maximum-payload-bytes: 65536
+  dispatch-workers: 2
+  dispatch-queue-capacity: 1024
+  reject-messages-older-than-seconds: 60
+```
+
+The Redis URI precedence is the `relay.redis.uri` system property, configured environment variable, secret file, then inline URI. `redis://` and TLS-enabled `rediss://` URIs are supported, including credentials and a database path.
+
+Each node subscribes only to:
+
+- `relay:<namespace>:broadcast`
+- `relay:<namespace>:paper` or `relay:<namespace>:velocity`
+- `relay:<namespace>:node:<node-id>`
+
+## Developer API
+
+Consumers should declare Relay as a required dependency and add this artifact as `compileOnly`; they must not shade the API into their plugin.
+
+```java
+public record PartyUpdated(UUID partyId, String operation, UUID playerId) {}
+
+Topic<PartyUpdated> PARTY_UPDATED = Topic.of(
+    "party:updated",
+    Codecs.json(PartyUpdated.class));
+
+MessagingService relay = Objects.requireNonNull(
+    Bukkit.getServicesManager().load(MessagingService.class),
+    "Relay is unavailable");
+
+relay.publish(
+    PARTY_UPDATED,
+    Destination.broadcast(),
+    new PartyUpdated(partyId, "MEMBER_JOINED", playerId));
+
+Subscription subscription = relay.subscribe(PARTY_UPDATED, message -> {
+    // This is a Relay worker, not Paper's server thread.
+    partyCache.invalidate(message.payload().partyId());
+});
+```
+
+Velocity consumers can obtain the plugin with `ProxyServer#getPluginManager()#getPlugin("relay")` and cast its instance to `MessagingService` after proxy initialization.
+
+Built-in codecs are `Codecs.utf8()`, `Codecs.bytes()`, and the explicitly typed `Codecs.json(Class<T>)`. Relay does not use Java serialization or transmit Java class names.
+
+Handlers run on a bounded dispatch executor. One handler failure is isolated from other subscribers. Paper/Folia world and entity work must be scheduled back onto the appropriate platform scheduler. Closing a `Subscription` immediately prevents future delivery.
+
+## Operations
+
+`/relay status`, `/relay subscriptions`, and `/relay diagnostics` require `relay.admin`. On Paper, the command is registered from the plugin bootstrapper through `LifecycleEvents.COMMANDS`, so registration follows Paper's reloadable lifecycle. Diagnostics expose published, received, rejected, handler-failure, reconnect, connectivity, and queue metrics without logging payload contents.
+
+The corresponding metric names are:
+
+- `relay_messages_published_total`
+- `relay_messages_received_total`
+- `relay_messages_rejected_total`
+- `relay_handler_failures_total`
+- `relay_redis_reconnects_total`
+- `relay_dispatch_queue_size`
+- `relay_redis_connected`
+
+Relay validates envelope schema, topic/node syntax, timestamps, content types, payload size, and bounded headers. Version 1 rejects unknown schemas and stale messages. Durable delivery, request/reply, wildcard routing, player-aware routing, database storage, and workflow scheduling are outside this API; a future Redis Streams implementation should use a separate `DurableMessagingService` contract.
