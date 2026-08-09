@@ -5,5 +5,5 @@ set -eu
 repository_root="$(git rev-parse --show-toplevel)"
 cd "$repository_root"
 
-echo "Running Orchestra lint checks..."
+echo "Running Relay lint checks..."
 sh ./gradlew lint --no-daemon
