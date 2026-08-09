@@ -256,3 +256,7 @@ The corresponding metric names are:
 Relay validates envelope schema, topic/node syntax, timestamps, content types, payload size, bounded headers, and agreement between the destination and incoming Redis channel. Version 1 rejects unknown schemas and stale messages.
 
 Redis Pub/Sub is transient and at-most-once. Keep clocks synchronized, use authenticated TLS connections outside trusted networks, store authoritative state elsewhere, and make handlers idempotent. Durable delivery, request/reply, wildcard routing, player-aware routing, database storage, and workflow scheduling are outside this API; a future Redis Streams implementation should use a separate `DurableMessagingService` contract.
+
+Contributions are welcome under the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md). Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+Relay is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE.md).
