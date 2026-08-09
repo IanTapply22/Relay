@@ -40,6 +40,12 @@ Pushing a semantic version tag such as `v1.2.3` runs the release workflow. It ve
 
 Aggregate Javadocs are built and deployed to GitHub Pages from the `main` branch.
 
+To trigger the publishing workflow, you must run the following:
+```shell
+git tag -a v<version> -m "Relay <version>"
+git push origin v<version>
+```
+
 ## Quick start
 
 1. Build or download `Relay-<version>.jar`.
