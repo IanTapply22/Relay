@@ -20,7 +20,9 @@ public final class PaperConfigLoader {
         String uri = firstNonBlank(
                 System.getProperty("relay.redis.uri"),
                 environment(config.getString("redis.uri-environment-variable", "RELAY_REDIS_URI")),
-                secretFile(config.getString("redis.uri-file", ""), plugin.getDataFolder().toPath()),
+                secretFile(
+                        config.getString("redis.uri-file", ""),
+                        plugin.getDataFolder().toPath()),
                 config.getString("redis.uri", ""));
         if (uri == null) throw new IllegalArgumentException("No Redis URI configured");
         return new RelayConfig(

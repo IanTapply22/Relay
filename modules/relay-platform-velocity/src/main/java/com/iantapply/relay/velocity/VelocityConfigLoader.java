@@ -63,8 +63,9 @@ final class VelocityConfigLoader {
     }
 
     private static String unquote(String value) {
-        if (value.length() >= 2 && ((value.startsWith("\"") && value.endsWith("\""))
-                || (value.startsWith("'") && value.endsWith("'")))) return value.substring(1, value.length() - 1);
+        if (value.length() >= 2
+                && ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))))
+            return value.substring(1, value.length() - 1);
         return value;
     }
 
@@ -72,7 +73,9 @@ final class VelocityConfigLoader {
         return Integer.parseInt(values.getOrDefault(key, Integer.toString(fallback)));
     }
 
-    private static String environment(String name) { return name == null || name.isBlank() ? null : System.getenv(name); }
+    private static String environment(String name) {
+        return name == null || name.isBlank() ? null : System.getenv(name);
+    }
 
     private static String secretFile(String configuredPath, Path dataDirectory) throws IOException {
         if (configuredPath == null || configuredPath.isBlank()) return null;

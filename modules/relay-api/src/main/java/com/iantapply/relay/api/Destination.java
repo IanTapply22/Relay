@@ -4,7 +4,13 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 public record Destination(Kind kind, String nodeId) {
-    public enum Kind { BROADCAST, PAPER, VELOCITY, NODE }
+    public enum Kind {
+        BROADCAST,
+        PAPER,
+        VELOCITY,
+        NODE
+    }
+
     private static final Pattern VALID_NODE = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
     public Destination {
@@ -18,10 +24,21 @@ public record Destination(Kind kind, String nodeId) {
         }
     }
 
-    public static Destination broadcast() { return new Destination(Kind.BROADCAST, null); }
-    public static Destination paperServers() { return new Destination(Kind.PAPER, null); }
-    public static Destination velocityProxies() { return new Destination(Kind.VELOCITY, null); }
-    public static Destination node(String id) { return new Destination(Kind.NODE, id); }
+    public static Destination broadcast() {
+        return new Destination(Kind.BROADCAST, null);
+    }
+
+    public static Destination paperServers() {
+        return new Destination(Kind.PAPER, null);
+    }
+
+    public static Destination velocityProxies() {
+        return new Destination(Kind.VELOCITY, null);
+    }
+
+    public static Destination node(String id) {
+        return new Destination(Kind.NODE, id);
+    }
 
     public String wireName() {
         return switch (kind) {

@@ -20,9 +20,6 @@ public final class ChannelRouter {
     }
 
     public List<String> subscriptions(RelayConfig config) {
-        return List.of(
-                prefix + "broadcast",
-                prefix + config.role().channelName(),
-                prefix + "node:" + config.nodeId());
+        return List.of(prefix + "broadcast", prefix + config.role().channelName(), prefix + "node:" + config.nodeId());
     }
 }

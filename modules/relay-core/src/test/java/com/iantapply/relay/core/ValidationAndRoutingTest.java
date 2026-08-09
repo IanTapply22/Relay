@@ -27,12 +27,13 @@ class ValidationAndRoutingTest {
         assertEquals("relay:production:paper", router.channel(Destination.paperServers()));
         assertEquals("relay:production:velocity", router.channel(Destination.velocityProxies()));
         assertEquals("relay:production:node:survival-1", router.channel(Destination.node("survival-1")));
-        assertEquals(List.of("relay:production:broadcast", "relay:production:paper", "relay:production:node:lobby-1"),
+        assertEquals(
+                List.of("relay:production:broadcast", "relay:production:paper", "relay:production:node:lobby-1"),
                 router.subscriptions(config("lobby-1", RelayConfig.NodeRole.PAPER)));
     }
 
     static RelayConfig config(String node, RelayConfig.NodeRole role) {
-        return new RelayConfig(node, role, URI.create("redis://localhost:6379"), "production",
-                65_536, 2, 32, Duration.ofSeconds(60));
+        return new RelayConfig(
+                node, role, URI.create("redis://localhost:6379"), "production", 65_536, 2, 32, Duration.ofSeconds(60));
     }
 }

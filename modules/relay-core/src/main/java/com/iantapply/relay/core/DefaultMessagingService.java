@@ -33,7 +33,8 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
     private final ChannelRouter channels;
     private final ThreadPoolExecutor dispatch;
     private final Logger logger;
-    private final Map<String, CopyOnWriteArrayList<RegisteredSubscription<?>>> subscriptions = new ConcurrentHashMap<>();
+    private final Map<String, CopyOnWriteArrayList<RegisteredSubscription<?>>> subscriptions =
+            new ConcurrentHashMap<>();
     private final LongAdder published = new LongAdder();
     private final LongAdder received = new LongAdder();
     private final LongAdder rejected = new LongAdder();
@@ -51,8 +52,13 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
             thread.setDaemon(true);
             return thread;
         };
-        this.dispatch = new ThreadPoolExecutor(config.dispatchWorkers(), config.dispatchWorkers(), 0L,
-                TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(config.dispatchQueueCapacity()), factory,
+        this.dispatch = new ThreadPoolExecutor(
+                config.dispatchWorkers(),
+                config.dispatchWorkers(),
+                0L,
+                TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(config.dispatchQueueCapacity()),
+                factory,
                 new ThreadPoolExecutor.AbortPolicy());
         transport.start(channels.subscriptions(config), this::receive);
     }
@@ -68,8 +74,17 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
         try {
             byte[] body = topic.codec().encode(payload);
             if (body == null) throw new IllegalArgumentException("Codec returned a null payload");
-            WireEnvelope envelope = new WireEnvelope(WireEnvelope.CURRENT_SCHEMA, id, topic.name(), config.nodeId(),
-                    destination, Instant.now(), topic.codec().contentType(), null, Map.of(), body);
+            WireEnvelope envelope = new WireEnvelope(
+                    WireEnvelope.CURRENT_SCHEMA,
+                    id,
+                    topic.name(),
+                    config.nodeId(),
+                    destination,
+                    Instant.now(),
+                    topic.codec().contentType(),
+                    null,
+                    Map.of(),
+                    body);
             encoded = envelopes.encode(envelope);
         } catch (Exception exception) {
             return CompletableFuture.failedFuture(exception);
@@ -86,7 +101,9 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
         Objects.requireNonNull(handler, "handler");
         if (closed.get()) throw new IllegalStateException("Relay is closed");
         RegisteredSubscription<T> subscription = new RegisteredSubscription<>(topic, handler);
-        subscriptions.computeIfAbsent(topic.name(), ignored -> new CopyOnWriteArrayList<>()).add(subscription);
+        subscriptions
+                .computeIfAbsent(topic.name(), ignored -> new CopyOnWriteArrayList<>())
+                .add(subscription);
         return subscription;
     }
 
@@ -97,7 +114,9 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
             envelope = envelopes.decode(encoded, Instant.now());
         } catch (Exception exception) {
             rejected.increment();
-            logger.log(Level.WARNING, "Rejected Relay message on {0}: {1}", new Object[]{channel, exception.getMessage()});
+            logger.log(
+                    Level.WARNING, "Rejected Relay message on {0}: {1}", new Object[] {channel, exception.getMessage()
+                    });
             return;
         }
         received.increment();
@@ -116,14 +135,28 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
 
     @Override
     public MessagingStatus status() {
-        int count = subscriptions.values().stream().mapToInt(list -> (int) list.stream().filter(RegisteredSubscription::active).count()).sum();
-        return new MessagingStatus(transport.connected(), config.nodeId(), count, dispatch.getQueue().size(),
-                dispatch.getActiveCount(), dispatch.getMaximumPoolSize());
+        int count = subscriptions.values().stream()
+                .mapToInt(list -> (int)
+                        list.stream().filter(RegisteredSubscription::active).count())
+                .sum();
+        return new MessagingStatus(
+                transport.connected(),
+                config.nodeId(),
+                count,
+                dispatch.getQueue().size(),
+                dispatch.getActiveCount(),
+                dispatch.getMaximumPoolSize());
     }
 
     public RelayMetrics metrics() {
-        return new RelayMetrics(published.sum(), received.sum(), rejected.sum(), handlerFailures.sum(),
-                transport.reconnects(), dispatch.getQueue().size(), transport.connected());
+        return new RelayMetrics(
+                published.sum(),
+                received.sum(),
+                rejected.sum(),
+                handlerFailures.sum(),
+                transport.reconnects(),
+                dispatch.getQueue().size(),
+                transport.connected());
     }
 
     @Override
@@ -144,7 +177,9 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
             this.handler = handler;
         }
 
-        public boolean active() { return active.get(); }
+        public boolean active() {
+            return active.get();
+        }
 
         public void close() {
             if (!active.compareAndSet(true, false)) return;
@@ -167,16 +202,29 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
                 payload = topic.codec().decode(envelope.payload());
             } catch (Exception exception) {
                 rejected.increment();
-                logger.log(Level.WARNING, "Relay codec failed for topic " + topic.name() + " (payload omitted)", exception);
+                logger.log(
+                        Level.WARNING,
+                        "Relay codec failed for topic " + topic.name() + " (payload omitted)",
+                        exception);
                 return;
             }
-            Message<T> message = new Message<>(envelope.id(), topic, payload, envelope.origin(),
-                    envelope.destination(), envelope.createdAt(), envelope.correlationId(), envelope.headers());
+            Message<T> message = new Message<>(
+                    envelope.id(),
+                    topic,
+                    payload,
+                    envelope.origin(),
+                    envelope.destination(),
+                    envelope.createdAt(),
+                    envelope.correlationId(),
+                    envelope.headers());
             try {
                 handler.handle(message);
             } catch (Exception exception) {
                 handlerFailures.increment();
-                logger.log(Level.WARNING, "Relay handler failed for topic " + topic.name() + " (payload omitted)", exception);
+                logger.log(
+                        Level.WARNING,
+                        "Relay handler failed for topic " + topic.name() + " (payload omitted)",
+                        exception);
             }
         }
     }

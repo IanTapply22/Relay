@@ -35,8 +35,14 @@ class MessagingContractTest {
         CountDownLatch received = new CountDownLatch(2);
         receiver.subscribe(topic, message -> received.countDown());
 
-        publisher.publish(topic, Destination.velocityProxies(), "role").toCompletableFuture().join();
-        publisher.publish(topic, Destination.node("proxy-1"), "node").toCompletableFuture().join();
+        publisher
+                .publish(topic, Destination.velocityProxies(), "role")
+                .toCompletableFuture()
+                .join();
+        publisher
+                .publish(topic, Destination.node("proxy-1"), "node")
+                .toCompletableFuture()
+                .join();
 
         assertTrue(received.await(2, TimeUnit.SECONDS));
         assertEquals(2, receiver.metrics().messagesReceived());
@@ -48,12 +54,19 @@ class MessagingContractTest {
         receiver = service("paper-2", RelayConfig.NodeRole.PAPER);
         Topic<String> topic = Topic.of("party:updated", Codecs.utf8());
         CountDownLatch healthy = new CountDownLatch(1);
-        receiver.subscribe(topic, message -> { throw new IllegalStateException("consumer failure"); });
-        Subscription removed = receiver.subscribe(topic, message -> { throw new AssertionError("closed subscription invoked"); });
+        receiver.subscribe(topic, message -> {
+            throw new IllegalStateException("consumer failure");
+        });
+        Subscription removed = receiver.subscribe(topic, message -> {
+            throw new AssertionError("closed subscription invoked");
+        });
         removed.close();
         receiver.subscribe(topic, message -> healthy.countDown());
 
-        publisher.publish(topic, Destination.paperServers(), "changed").toCompletableFuture().join();
+        publisher
+                .publish(topic, Destination.paperServers(), "changed")
+                .toCompletableFuture()
+                .join();
 
         assertTrue(healthy.await(2, TimeUnit.SECONDS));
         awaitMetric(() -> receiver.metrics().handlerFailures() == 1);
@@ -65,14 +78,22 @@ class MessagingContractTest {
     void reportsDisconnectedPublish() {
         InMemoryTransport transport = new InMemoryTransport();
         transport.close();
-        assertTrue(transport.publish("channel", new byte[0]).toCompletableFuture().isCompletedExceptionally());
+        assertTrue(
+                transport.publish("channel", new byte[0]).toCompletableFuture().isCompletedExceptionally());
     }
 
     @Test
     void boundsTheDispatchQueue() throws Exception {
         publisher = service("paper-1", RelayConfig.NodeRole.PAPER);
-        RelayConfig constrained = new RelayConfig("paper-2", RelayConfig.NodeRole.PAPER,
-                URI.create("redis://localhost:6379"), "production", 65_536, 1, 1, Duration.ofSeconds(60));
+        RelayConfig constrained = new RelayConfig(
+                "paper-2",
+                RelayConfig.NodeRole.PAPER,
+                URI.create("redis://localhost:6379"),
+                "production",
+                65_536,
+                1,
+                1,
+                Duration.ofSeconds(60));
         receiver = new DefaultMessagingService(constrained, new InMemoryTransport(), Logger.getAnonymousLogger());
         Topic<String> topic = Topic.of("queue:test", Codecs.utf8());
         CountDownLatch started = new CountDownLatch(1);
@@ -82,10 +103,19 @@ class MessagingContractTest {
             release.await(2, TimeUnit.SECONDS);
         });
 
-        publisher.publish(topic, Destination.paperServers(), "one").toCompletableFuture().join();
+        publisher
+                .publish(topic, Destination.paperServers(), "one")
+                .toCompletableFuture()
+                .join();
         assertTrue(started.await(1, TimeUnit.SECONDS));
-        publisher.publish(topic, Destination.paperServers(), "two").toCompletableFuture().join();
-        publisher.publish(topic, Destination.paperServers(), "three").toCompletableFuture().join();
+        publisher
+                .publish(topic, Destination.paperServers(), "two")
+                .toCompletableFuture()
+                .join();
+        publisher
+                .publish(topic, Destination.paperServers(), "three")
+                .toCompletableFuture()
+                .join();
 
         assertEquals(1, receiver.metrics().messagesRejected());
         assertEquals(1, receiver.metrics().dispatchQueueSize());
@@ -98,13 +128,29 @@ class MessagingContractTest {
         receiver = service("paper-2", RelayConfig.NodeRole.PAPER);
         Topic<String> publisherTopic = Topic.of("codec:test", Codecs.utf8());
         Topic<String> receiverTopic = Topic.of("codec:test", new MessageCodec<>() {
-            @Override public byte[] encode(String value) { return value.getBytes(); }
-            @Override public String decode(byte[] payload) { throw new IllegalArgumentException("bad payload"); }
-            @Override public String contentType() { return "text/plain; charset=utf-8"; }
-        });
-        receiver.subscribe(receiverTopic, message -> { throw new AssertionError("handler must not run"); });
+            @Override
+            public byte[] encode(String value) {
+                return value.getBytes();
+            }
 
-        publisher.publish(publisherTopic, Destination.paperServers(), "bad").toCompletableFuture().join();
+            @Override
+            public String decode(byte[] payload) {
+                throw new IllegalArgumentException("bad payload");
+            }
+
+            @Override
+            public String contentType() {
+                return "text/plain; charset=utf-8";
+            }
+        });
+        receiver.subscribe(receiverTopic, message -> {
+            throw new AssertionError("handler must not run");
+        });
+
+        publisher
+                .publish(publisherTopic, Destination.paperServers(), "bad")
+                .toCompletableFuture()
+                .join();
 
         awaitMetric(() -> receiver.metrics().messagesRejected() == 1);
         assertEquals(1, receiver.metrics().messagesRejected());
@@ -112,12 +158,16 @@ class MessagingContractTest {
     }
 
     private static DefaultMessagingService service(String node, RelayConfig.NodeRole role) {
-        return new DefaultMessagingService(ValidationAndRoutingTest.config(node, role), new InMemoryTransport(), Logger.getAnonymousLogger());
+        return new DefaultMessagingService(
+                ValidationAndRoutingTest.config(node, role), new InMemoryTransport(), Logger.getAnonymousLogger());
     }
 
     private static void awaitMetric(Check check) throws InterruptedException {
         for (int attempt = 0; attempt < 100 && !check.done(); attempt++) Thread.sleep(10);
     }
 
-    @FunctionalInterface private interface Check { boolean done(); }
+    @FunctionalInterface
+    private interface Check {
+        boolean done();
+    }
 }

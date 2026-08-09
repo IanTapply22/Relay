@@ -31,8 +31,13 @@ public final class InMemoryTransport implements MessageTransport {
         INSTANCES.add(this);
     }
 
-    public boolean connected() { return open; }
-    public long reconnects() { return 0; }
+    public boolean connected() {
+        return open;
+    }
+
+    public long reconnects() {
+        return 0;
+    }
 
     public void close() {
         open = false;

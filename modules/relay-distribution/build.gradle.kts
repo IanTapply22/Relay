@@ -1,6 +1,7 @@
 plugins {
-    java
-    id("xyz.jpenilla.run-paper") version "3.0.2"
+    `java-library`
+    `maven-publish`
+    id("xyz.jpenilla.run-paper")
 }
 
 dependencies {
@@ -10,6 +11,7 @@ dependencies {
 
 tasks.jar {
     archiveBaseName = "Relay"
+    destinationDirectory = rootProject.layout.buildDirectory.dir("libs")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     dependsOn(
         ":relay-api:jar",
@@ -20,12 +22,27 @@ tasks.jar {
     )
 
     from({
-        configurations.runtimeClasspath.get()
+        configurations.runtimeClasspath
+            .get()
             .filter { it.name.endsWith(".jar") }
             .map(::zipTree)
     })
 
     exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA", "module-info.class")
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("plugin") {
+            artifact(tasks.jar)
+            artifactId = "relay"
+            pom {
+                name = "Relay"
+                description = project.description.toString()
+                url = "https://github.com/IanTapply22/Relay"
+            }
+        }
+    }
 }
 
 tasks.runServer {

@@ -23,5 +23,8 @@ public record WireEnvelope(
         payload = payload.clone();
     }
 
-    @Override public byte[] payload() { return payload.clone(); }
+    @Override
+    public byte[] payload() {
+        return payload.clone();
+    }
 }

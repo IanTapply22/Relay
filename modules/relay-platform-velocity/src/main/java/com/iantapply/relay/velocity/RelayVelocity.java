@@ -21,7 +21,11 @@ import java.nio.file.Path;
 import java.util.concurrent.CompletionStage;
 import java.util.logging.Logger;
 
-@Plugin(id = "relay", name = "Relay", version = "1.0.0", authors = {"Gucci Fox"},
+@Plugin(
+        id = "relay",
+        name = "Relay",
+        version = "1.0.0",
+        authors = {"Gucci Fox"},
         description = "Transient Redis messaging for Paper and Velocity")
 public final class RelayVelocity implements MessagingService {
     private final ProxyServer proxy;
@@ -44,10 +48,15 @@ public final class RelayVelocity implements MessagingService {
                 throw new IllegalArgumentException("Velocity configuration must use node.role: velocity");
             }
             Logger coreLogger = Logger.getLogger("Relay-Velocity");
-            messaging = new DefaultMessagingService(config, new RedisPubSubTransport(config.redisUri(), coreLogger), coreLogger);
-            proxy.getCommandManager().register(
-                    proxy.getCommandManager().metaBuilder("relay").plugin(this).build(),
-                    new VelocityRelayCommand(messaging, config));
+            messaging = new DefaultMessagingService(
+                    config, new RedisPubSubTransport(config.redisUri(), coreLogger), coreLogger);
+            proxy.getCommandManager()
+                    .register(
+                            proxy.getCommandManager()
+                                    .metaBuilder("relay")
+                                    .plugin(this)
+                                    .build(),
+                            new VelocityRelayCommand(messaging, config));
             logger.info("Relay enabled for node {} (transient, at-most-once delivery)", config.nodeId());
         } catch (Exception exception) {
             logger.error("Relay could not start", exception);
@@ -66,9 +75,18 @@ public final class RelayVelocity implements MessagingService {
         return current;
     }
 
-    @Override public <T> CompletionStage<MessageId> publish(Topic<T> topic, Destination destination, T payload) {
+    @Override
+    public <T> CompletionStage<MessageId> publish(Topic<T> topic, Destination destination, T payload) {
         return service().publish(topic, destination, payload);
     }
-    @Override public <T> Subscription subscribe(Topic<T> topic, MessageHandler<T> handler) { return service().subscribe(topic, handler); }
-    @Override public MessagingStatus status() { return service().status(); }
+
+    @Override
+    public <T> Subscription subscribe(Topic<T> topic, MessageHandler<T> handler) {
+        return service().subscribe(topic, handler);
+    }
+
+    @Override
+    public MessagingStatus status() {
+        return service().status();
+    }
 }

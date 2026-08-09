@@ -12,7 +12,7 @@ Relay requires Java 25 for the configured Paper 26.2 development bundle.
 ./gradlew clean test jar
 ```
 
-The combined plugin is written to `modules/relay-distribution/build/libs/Relay-<version>.jar`.
+The combined plugin is written to `build/libs/Relay-<version>.jar`.
 
 ## Modules
 
@@ -25,10 +25,20 @@ All modules live under the `modules/` directory while retaining their short Grad
 - `relay-platform-velocity`: Velocity lifecycle, service exposure, configuration, and administration command.
 - `relay-distribution`: combined Paper/Velocity plugin JAR with runtime dependencies.
 
-Publish the API to the local Maven repository for consumer development with:
+Useful root build tasks include:
+
+- `check`: tests, SpotBugs, Spotless, and aggregate coverage verification.
+- `javadoc`: aggregate module documentation under `build/docs/javadoc`.
+- `jar`: combined Paper and Velocity distribution under `build/libs`.
+- `cyclonedxBom`: JSON and XML software bills of materials.
+- `lint` / `lintFix`: verify or apply the shared source and project formatting rules.
+- `runServer`: launch Paper with the combined Relay distribution.
+- `publish`: sign and publish `relay-api` and `relay` to GitHub Packages.
+
+Publish both Maven artifacts locally for consumer development with:
 
 ```text
-./gradlew :relay-api:publishToMavenLocal
+./gradlew publishToMavenLocal
 ```
 
 ## Configuration

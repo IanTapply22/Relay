@@ -1,0 +1,12 @@
+name: Relay
+version: '${version}'
+main: com.iantapply.relay.Relay
+description: "A lightweight Paper/Velocity plugin that supports cross-server message publishing and subscribing built on Redis"
+api-version: '26.2'
+authors:
+  - Gucci Fox
+prefix: Relay
+permissions:
+  relay.admin:
+    description: Allows use of Relay administration commands
+    default: op

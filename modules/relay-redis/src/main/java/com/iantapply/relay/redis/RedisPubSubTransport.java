@@ -106,7 +106,11 @@ public final class RedisPubSubTransport implements MessageTransport {
                     if ("message".equals(kind)) receiver.accept(text(values.get(1)), binary(values.get(2)));
                 }
             } catch (Exception exception) {
-                if (open.get()) logger.log(Level.WARNING, "Redis subscription disconnected; reconnecting: {0}", exception.getMessage());
+                if (open.get())
+                    logger.log(
+                            Level.WARNING,
+                            "Redis subscription disconnected; reconnecting: {0}",
+                            exception.getMessage());
             } finally {
                 connected.set(false);
                 closeQuietly(subscribeConnection);
@@ -124,9 +128,7 @@ public final class RedisPubSubTransport implements MessageTransport {
     }
 
     private RespConnection connect() throws IOException {
-        Socket socket = endpoint.tls()
-                ? SSLSocketFactory.getDefault().createSocket()
-                : new Socket();
+        Socket socket = endpoint.tls() ? SSLSocketFactory.getDefault().createSocket() : new Socket();
         socket.connect(new InetSocketAddress(endpoint.host(), endpoint.port()), 3_000);
         socket.setKeepAlive(true);
         RespConnection connection = new RespConnection(socket);
@@ -137,7 +139,8 @@ public final class RedisPubSubTransport implements MessageTransport {
                         : connection.command(bytes("AUTH"), bytes(endpoint.username()), bytes(endpoint.password()));
                 requireOk(response, "AUTH");
             }
-            if (endpoint.database() != 0) requireOk(connection.command(bytes("SELECT"), bytes(Integer.toString(endpoint.database()))), "SELECT");
+            if (endpoint.database() != 0)
+                requireOk(connection.command(bytes("SELECT"), bytes(Integer.toString(endpoint.database()))), "SELECT");
             return connection;
         } catch (IOException exception) {
             connection.close();
@@ -149,8 +152,15 @@ public final class RedisPubSubTransport implements MessageTransport {
         if (!"OK".equals(response)) throw new IOException(command + " failed");
     }
 
-    @Override public boolean connected() { return connected.get(); }
-    @Override public long reconnects() { return reconnects.get(); }
+    @Override
+    public boolean connected() {
+        return connected.get();
+    }
+
+    @Override
+    public long reconnects() {
+        return reconnects.get();
+    }
 
     @Override
     public void close() {
@@ -163,22 +173,33 @@ public final class RedisPubSubTransport implements MessageTransport {
         if (thread != null) thread.interrupt();
     }
 
-    private static byte[] bytes(String value) { return value.getBytes(StandardCharsets.UTF_8); }
-    private static String text(Object value) { return new String(binary(value), StandardCharsets.UTF_8); }
+    private static byte[] bytes(String value) {
+        return value.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String text(Object value) {
+        return new String(binary(value), StandardCharsets.UTF_8);
+    }
+
     private static byte[] binary(Object value) {
         if (value instanceof byte[] bytes) return bytes;
         if (value instanceof String string) return bytes(string);
         throw new IllegalArgumentException("Expected RESP string");
     }
+
     private static void closeQuietly(RespConnection connection) {
         if (connection == null) return;
-        try { connection.close(); } catch (IOException ignored) {}
+        try {
+            connection.close();
+        } catch (IOException ignored) {
+        }
     }
 
     private record RedisEndpoint(String host, int port, boolean tls, String username, String password, int database) {
         private static RedisEndpoint parse(URI uri) {
             String scheme = uri.getScheme();
-            if (!"redis".equals(scheme) && !"rediss".equals(scheme)) throw new IllegalArgumentException("Unsupported Redis URI scheme");
+            if (!"redis".equals(scheme) && !"rediss".equals(scheme))
+                throw new IllegalArgumentException("Unsupported Redis URI scheme");
             if (uri.getHost() == null) throw new IllegalArgumentException("Redis URI must include a host");
             String username = null;
             String password = null;
@@ -197,7 +218,9 @@ public final class RedisPubSubTransport implements MessageTransport {
             return new RedisEndpoint(uri.getHost(), port, "rediss".equals(scheme), username, password, database);
         }
 
-        private static String decode(String value) { return URLDecoder.decode(value, StandardCharsets.UTF_8); }
+        private static String decode(String value) {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        }
     }
 
     private static final class RespConnection implements AutoCloseable {
@@ -243,7 +266,8 @@ public final class RedisPubSubTransport implements MessageTransport {
             int length = Integer.parseInt(line());
             if (length < 0) return null;
             byte[] value = input.readNBytes(length);
-            if (value.length != length || input.read() != '\r' || input.read() != '\n') throw new EOFException("Truncated RESP bulk string");
+            if (value.length != length || input.read() != '\r' || input.read() != '\n')
+                throw new EOFException("Truncated RESP bulk string");
             return value;
         }
 
@@ -268,7 +292,13 @@ public final class RedisPubSubTransport implements MessageTransport {
             }
         }
 
-        private boolean closed() { return socket.isClosed() || !socket.isConnected(); }
-        @Override public void close() throws IOException { socket.close(); }
+        private boolean closed() {
+            return socket.isClosed() || !socket.isConnected();
+        }
+
+        @Override
+        public void close() throws IOException {
+            socket.close();
+        }
     }
 }

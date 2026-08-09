@@ -65,9 +65,7 @@ public final class RelayCommands {
     }
 
     private static int usage(CommandSender sender) {
-        sender.sendMessage(Component.text(
-                "Usage: /relay <status|subscriptions|diagnostics>",
-                NamedTextColor.YELLOW));
+        sender.sendMessage(Component.text("Usage: /relay <status|subscriptions|diagnostics>", NamedTextColor.YELLOW));
         return Command.SINGLE_SUCCESS;
     }
 

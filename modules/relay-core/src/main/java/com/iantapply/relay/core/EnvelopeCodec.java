@@ -49,22 +49,29 @@ public final class EnvelopeCodec {
 
     public WireEnvelope decode(byte[] encoded, Instant now) {
         try {
-            JsonObject root = JsonParser.parseString(new String(encoded, StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject root = JsonParser.parseString(new String(encoded, StandardCharsets.UTF_8))
+                    .getAsJsonObject();
             int schema = required(root, "schema").getAsInt();
             MessageId id = MessageId.parse(required(root, "id").getAsString());
             String topic = required(root, "topic").getAsString();
             String origin = required(root, "origin").getAsString();
-            Destination destination = parseDestination(required(root, "destination").getAsString());
+            Destination destination =
+                    parseDestination(required(root, "destination").getAsString());
             Instant createdAt = Instant.parse(required(root, "createdAt").getAsString());
             String contentType = required(root, "contentType").getAsString();
             JsonElement correlation = root.get("correlationId");
-            MessageId correlationId = correlation == null || correlation.isJsonNull() ? null : MessageId.parse(correlation.getAsString());
+            MessageId correlationId =
+                    correlation == null || correlation.isJsonNull() ? null : MessageId.parse(correlation.getAsString());
             Map<String, String> headers = new LinkedHashMap<>();
             JsonObject jsonHeaders = required(root, "headers").getAsJsonObject();
-            jsonHeaders.entrySet().forEach(entry -> headers.put(entry.getKey(), entry.getValue().getAsString()));
-            byte[] payload = Base64.getDecoder().decode(required(root, "payload").getAsString());
-            WireEnvelope envelope = new WireEnvelope(schema, id, topic, origin, destination, createdAt,
-                    contentType, correlationId, headers, payload);
+            jsonHeaders
+                    .entrySet()
+                    .forEach(entry ->
+                            headers.put(entry.getKey(), entry.getValue().getAsString()));
+            byte[] payload =
+                    Base64.getDecoder().decode(required(root, "payload").getAsString());
+            WireEnvelope envelope = new WireEnvelope(
+                    schema, id, topic, origin, destination, createdAt, contentType, correlationId, headers, payload);
             validate(envelope, now);
             return envelope;
         } catch (IllegalArgumentException exception) {
@@ -88,19 +95,25 @@ public final class EnvelopeCodec {
         if (envelope.origin() == null || !NODE_ID.matcher(envelope.origin()).matches()) {
             throw new IllegalArgumentException("Invalid envelope origin");
         }
-        if (envelope.contentType() == null || envelope.contentType().isBlank() || envelope.contentType().length() > 128) {
+        if (envelope.contentType() == null
+                || envelope.contentType().isBlank()
+                || envelope.contentType().length() > 128) {
             throw new IllegalArgumentException("Invalid content type");
         }
-        if (envelope.payload().length > maximumPayloadBytes) throw new IllegalArgumentException("Payload exceeds configured limit");
+        if (envelope.payload().length > maximumPayloadBytes)
+            throw new IllegalArgumentException("Payload exceeds configured limit");
         if (envelope.headers().size() > MAXIMUM_HEADERS) throw new IllegalArgumentException("Too many headers");
         envelope.headers().forEach((key, value) -> {
-            if (key.isEmpty() || key.length() > MAXIMUM_HEADER_KEY_LENGTH) throw new IllegalArgumentException("Invalid header key length");
-            if (value.length() > MAXIMUM_HEADER_VALUE_LENGTH) throw new IllegalArgumentException("Invalid header value length");
+            if (key.isEmpty() || key.length() > MAXIMUM_HEADER_KEY_LENGTH)
+                throw new IllegalArgumentException("Invalid header key length");
+            if (value.length() > MAXIMUM_HEADER_VALUE_LENGTH)
+                throw new IllegalArgumentException("Invalid header value length");
         });
         if (!maximumAge.isZero() && envelope.createdAt().isBefore(now.minus(maximumAge))) {
             throw new IllegalArgumentException("Stale message");
         }
-        if (envelope.createdAt().isAfter(now.plusSeconds(30))) throw new IllegalArgumentException("Message timestamp is in the future");
+        if (envelope.createdAt().isAfter(now.plusSeconds(30)))
+            throw new IllegalArgumentException("Message timestamp is in the future");
     }
 
     private static Destination parseDestination(String value) {
