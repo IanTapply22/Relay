@@ -9,6 +9,7 @@ import com.iantapply.relay.paper.command.RelayCommands;
 import com.iantapply.relay.redis.RedisPubSubTransport;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.util.List;
+import java.util.logging.Level;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -29,7 +30,7 @@ public final class Relay extends JavaPlugin {
             registerCommands(messaging, config);
             getLogger().info("Relay enabled for node " + config.nodeId() + " (transient, at-most-once delivery)");
         } catch (Exception exception) {
-            getLogger().severe("Relay could not start: " + exception.getMessage());
+            getLogger().log(Level.SEVERE, "Relay could not start", exception);
             getServer().getPluginManager().disablePlugin(this);
         }
     }
@@ -51,8 +52,10 @@ public final class Relay extends JavaPlugin {
         return List.of(
                 "role=" + config.role().channelName() + ", namespace=" + config.namespace(),
                 "published=" + metrics.messagesPublished() + ", received=" + metrics.messagesReceived(),
-                "rejected=" + metrics.messagesRejected() + ", handlerFailures=" + metrics.handlerFailures(),
+                "rejected=" + metrics.messagesRejected() + ", queueDrops=" + metrics.dispatchQueueDrops(),
+                "handlerFailures=" + metrics.handlerFailures(),
                 "reconnects=" + metrics.redisReconnects() + ", queue=" + metrics.dispatchQueueSize(),
-                "redisConnected=" + metrics.redisConnected());
+                "publisherConnected=" + metrics.publisherConnected() + ", subscriberConnected="
+                        + metrics.subscriberConnected());
     }
 }

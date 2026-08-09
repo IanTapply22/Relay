@@ -1,6 +1,7 @@
 plugins {
     `java-library`
     `maven-publish`
+    id("com.gradleup.shadow") version "9.6.1"
     id("xyz.jpenilla.run-paper")
 }
 
@@ -10,31 +11,23 @@ dependencies {
 }
 
 tasks.jar {
+    archiveClassifier = "thin"
+}
+
+tasks.shadowJar {
     archiveBaseName = "Relay"
+    archiveClassifier = ""
     destinationDirectory = rootProject.layout.buildDirectory.dir("libs")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    dependsOn(
-        ":relay-api:jar",
-        ":relay-core:jar",
-        ":relay-redis:jar",
-        ":relay-platform-paper:jar",
-        ":relay-platform-velocity:jar",
-    )
-
-    from({
-        configurations.runtimeClasspath
-            .get()
-            .filter { it.name.endsWith(".jar") }
-            .map(::zipTree)
-    })
-
+    relocate("com.google.gson", "com.iantapply.relay.libs.gson")
+    relocate("org.yaml.snakeyaml", "com.iantapply.relay.libs.snakeyaml")
     exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA", "module-info.class")
 }
 
 publishing {
     publications {
         create<MavenPublication>("plugin") {
-            artifact(tasks.jar)
+            artifact(tasks.shadowJar)
             artifactId = "relay"
             pom {
                 name = "Relay"
@@ -47,5 +40,6 @@ publishing {
 
 tasks.runServer {
     minecraftVersion("26.2")
+    pluginJars.from(tasks.shadowJar.flatMap { it.archiveFile })
     jvmArgs("-Xms2G", "-Xmx2G", "-Dcom.mojang.eula.agree=true")
 }

@@ -31,6 +31,24 @@ public interface MessageTransport extends AutoCloseable {
     boolean connected();
 
     /**
+     * Reports publication-side connectivity.
+     *
+     * @return {@code true} when the transport can currently publish
+     */
+    default boolean publisherConnected() {
+        return connected();
+    }
+
+    /**
+     * Reports subscription-side connectivity.
+     *
+     * @return {@code true} when the transport is currently subscribed
+     */
+    default boolean subscriberConnected() {
+        return connected();
+    }
+
+    /**
      * Returns the number of successful subscriber reconnections.
      *
      * @return reconnect count

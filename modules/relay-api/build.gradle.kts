@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    api("com.google.code.gson:gson:2.13.2")
+    implementation("com.google.code.gson:gson:2.13.2")
 }
 
 publishing {

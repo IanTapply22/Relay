@@ -6,6 +6,7 @@ import com.iantapply.relay.api.MessageHandler;
 import com.iantapply.relay.api.MessageId;
 import com.iantapply.relay.api.MessagingService;
 import com.iantapply.relay.api.MessagingStatus;
+import com.iantapply.relay.api.PublishOptions;
 import com.iantapply.relay.api.Subscription;
 import com.iantapply.relay.api.Topic;
 import com.iantapply.relay.core.DefaultMessagingService;
@@ -14,7 +15,6 @@ import com.iantapply.relay.redis.RedisPubSubTransport;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
-import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 import java.nio.file.Path;
@@ -22,12 +22,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.logging.Logger;
 
 /** Velocity entry point and platform-facing {@link MessagingService} implementation. */
-@Plugin(
-        id = "relay",
-        name = "Relay",
-        version = "1.0.0",
-        authors = {"Gucci Fox"},
-        description = "Transient Redis messaging for Paper and Velocity")
 public final class RelayVelocity implements MessagingService {
     private final ProxyServer proxy;
     private final org.slf4j.Logger logger;
@@ -96,6 +90,12 @@ public final class RelayVelocity implements MessagingService {
     @Override
     public <T> CompletionStage<MessageId> publish(Topic<T> topic, Destination destination, T payload) {
         return service().publish(topic, destination, payload);
+    }
+
+    @Override
+    public <T> CompletionStage<MessageId> publish(
+            Topic<T> topic, Destination destination, T payload, PublishOptions options) {
+        return service().publish(topic, destination, payload, options);
     }
 
     @Override

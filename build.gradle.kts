@@ -223,11 +223,11 @@ val aggregateCoverageVerification =
             rule {
                 limit {
                     counter = "LINE"
-                    minimum = "0.25".toBigDecimal()
+                    minimum = "0.70".toBigDecimal()
                 }
                 limit {
                     counter = "BRANCH"
-                    minimum = "0.20".toBigDecimal()
+                    minimum = "0.50".toBigDecimal()
                 }
             }
         }
@@ -263,7 +263,7 @@ tasks.register("test") {
 tasks.register("jar") {
     group = "build"
     description = "Builds the combined Paper and Velocity plugin JAR."
-    dependsOn(":relay-distribution:jar")
+    dependsOn(":relay-distribution:shadowJar")
 }
 
 tasks.register("runServer") {

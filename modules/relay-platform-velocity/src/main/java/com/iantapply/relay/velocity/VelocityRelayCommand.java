@@ -36,10 +36,13 @@ final class VelocityRelayCommand implements SimpleCommand {
                                 + config.namespace()
                                 + ", published=" + metrics.messagesPublished() + ", received="
                                 + metrics.messagesReceived()
-                                + ", rejected=" + metrics.messagesRejected() + ", handlerFailures="
+                                + ", rejected=" + metrics.messagesRejected() + ", queueDrops="
+                                + metrics.dispatchQueueDrops() + ", handlerFailures="
                                 + metrics.handlerFailures()
                                 + ", reconnects=" + metrics.redisReconnects() + ", queue="
-                                + metrics.dispatchQueueSize();
+                                + metrics.dispatchQueueSize() + ", publisherConnected="
+                                + metrics.publisherConnected() + ", subscriberConnected="
+                                + metrics.subscriberConnected();
                     }
                     default -> "Usage: /relay <status|subscriptions|diagnostics>";
                 };

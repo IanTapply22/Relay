@@ -6,6 +6,7 @@ import com.iantapply.relay.api.MessageHandler;
 import com.iantapply.relay.api.MessageId;
 import com.iantapply.relay.api.MessagingService;
 import com.iantapply.relay.api.MessagingStatus;
+import com.iantapply.relay.api.PublishOptions;
 import com.iantapply.relay.api.Subscription;
 import com.iantapply.relay.api.Topic;
 import java.time.Instant;
@@ -39,6 +40,7 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
     private final LongAdder published = new LongAdder();
     private final LongAdder received = new LongAdder();
     private final LongAdder rejected = new LongAdder();
+    private final LongAdder dispatchQueueDrops = new LongAdder();
     private final LongAdder handlerFailures = new LongAdder();
     private final AtomicBoolean closed = new AtomicBoolean();
 
@@ -68,14 +70,27 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
                 new LinkedBlockingQueue<>(config.dispatchQueueCapacity()),
                 factory,
                 new ThreadPoolExecutor.AbortPolicy());
-        transport.start(channels.subscriptions(config), this::receive);
+        try {
+            transport.start(channels.subscriptions(config), this::receive);
+        } catch (RuntimeException exception) {
+            dispatch.shutdownNow();
+            transport.close();
+            throw exception;
+        }
     }
 
     @Override
     public <T> CompletionStage<MessageId> publish(Topic<T> topic, Destination destination, T payload) {
+        return publish(topic, destination, payload, PublishOptions.defaults());
+    }
+
+    @Override
+    public <T> CompletionStage<MessageId> publish(
+            Topic<T> topic, Destination destination, T payload, PublishOptions options) {
         Objects.requireNonNull(topic, "topic");
         Objects.requireNonNull(destination, "destination");
         Objects.requireNonNull(payload, "payload");
+        Objects.requireNonNull(options, "options");
         if (closed.get()) return CompletableFuture.failedFuture(new IllegalStateException("Relay is closed"));
         final MessageId id = MessageId.random();
         final byte[] encoded;
@@ -90,8 +105,8 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
                     destination,
                     Instant.now(),
                     topic.codec().contentType(),
-                    null,
-                    Map.of(),
+                    options.correlationId(),
+                    options.headers(),
                     body);
             encoded = envelopes.encode(envelope);
         } catch (Exception exception) {
@@ -109,9 +124,18 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
         Objects.requireNonNull(handler, "handler");
         if (closed.get()) throw new IllegalStateException("Relay is closed");
         RegisteredSubscription<T> subscription = new RegisteredSubscription<>(topic, handler);
-        subscriptions
-                .computeIfAbsent(topic.name(), ignored -> new CopyOnWriteArrayList<>())
-                .add(subscription);
+        subscriptions.compute(topic.name(), (ignored, listeners) -> {
+            CopyOnWriteArrayList<RegisteredSubscription<?>> current =
+                    listeners == null ? new CopyOnWriteArrayList<>() : listeners;
+            if (current.stream().anyMatch(listener -> !listener.topic
+                    .codec()
+                    .contentType()
+                    .equals(topic.codec().contentType()))) {
+                throw new IllegalArgumentException("Conflicting content type for Relay topic " + topic.name());
+            }
+            current.add(subscription);
+            return current;
+        });
         return subscription;
     }
 
@@ -127,6 +151,12 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
                     });
             return;
         }
+        String expectedChannel = channels.channel(envelope.destination());
+        if (!expectedChannel.equals(channel)) {
+            rejected.increment();
+            logger.log(Level.WARNING, "Rejected Relay message {0}: destination does not match channel", envelope.id());
+            return;
+        }
         received.increment();
         List<RegisteredSubscription<?>> listeners = subscriptions.get(envelope.topic());
         if (listeners == null) return;
@@ -135,7 +165,7 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
             try {
                 dispatch.execute(() -> listener.deliver(envelope));
             } catch (RejectedExecutionException exception) {
-                rejected.increment();
+                dispatchQueueDrops.increment();
                 logger.log(Level.WARNING, "Relay dispatch queue is full; dropped message {0}", envelope.id());
             }
         }
@@ -148,7 +178,8 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
                         list.stream().filter(RegisteredSubscription::active).count())
                 .sum();
         return new MessagingStatus(
-                transport.connected(),
+                transport.publisherConnected(),
+                transport.subscriberConnected(),
                 config.nodeId(),
                 count,
                 dispatch.getQueue().size(),
@@ -166,10 +197,12 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
                 published.sum(),
                 received.sum(),
                 rejected.sum(),
+                dispatchQueueDrops.sum(),
                 handlerFailures.sum(),
                 transport.reconnects(),
                 dispatch.getQueue().size(),
-                transport.connected());
+                transport.publisherConnected(),
+                transport.subscriberConnected());
     }
 
     @Override
@@ -178,6 +211,17 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
         subscriptions.clear();
         transport.close();
         dispatch.shutdownNow();
+        awaitTermination(dispatch, "dispatch executor");
+    }
+
+    private void awaitTermination(ThreadPoolExecutor executor, String resource) {
+        try {
+            if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+                logger.log(Level.WARNING, "Relay {0} did not terminate cleanly", resource);
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private final class RegisteredSubscription<T> implements Subscription {

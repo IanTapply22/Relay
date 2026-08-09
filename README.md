@@ -4,6 +4,97 @@ Relay is a small, typed Redis Pub/Sub messaging layer for Paper and Velocity net
 
 Relay deliberately provides transient notifications and commands, not durable application state. A successful publish means Redis accepted the message. Nodes that are disconnected miss messages, and handlers should be idempotent. Store authoritative party/player state elsewhere and use Relay to announce that it changed.
 
+## How it works
+
+```text
+                                      RELAY
+
+  PRODUCERS                                                     DESTINATIONS
+
+  Paper plugin -----------+                         +---- Every Relay node
+                          |                         |
+  Velocity plugin --------+                         +---- Every Paper server
+                          |                         |
+  Plugin extension -------+                         +---- Every Velocity proxy
+                          |                         |
+                          v                         +---- One named node
+                 +-------------------+              |
+                 | MessagingService  |<-------------+
+                 | typed publish API |
+                 +---------+---------+
+                           |
+                 topic codec encodes payload
+                           |
+                           v
+                 +-------------------+
+                 | Wire envelope     |
+                 | ID, topic, origin,|
+                 | destination, time,|
+                 | type + metadata   |
+                 +---------+---------+
+                           |
+                 validate and route destination
+                           |
+                           v
+                 +-------------------+
+                 | Redis publisher   |
+                 | AUTH, SELECT, TLS |
+                 +---------+---------+
+                           |
+                       PUBLISH
+                           |
+                           v
+                 +------------------------------+
+                 | Redis Pub/Sub channels       |
+                 | broadcast | paper | velocity |
+                 | node:<node-id>               |
+                 +---------------+--------------+
+                                 |
+             +-------------------+-------------------+
+             |                                       |
+             v                                       v
+  +----------------------+                 +----------------------+
+  | Paper Relay node     |                 | Velocity Relay node  |
+  | broadcast + paper +  |                 | broadcast + velocity|
+  | its node channel     |                 | + its node channel   |
+  +----------+-----------+                 +-----------+----------+
+             |                                         |
+             +-------------------+---------------------+
+                                 |
+                                 v
+                     +-----------------------+
+                     | Envelope validation   |
+                     | schema, age, payload, |
+                     | headers, destination  |
+                     | and incoming channel  |
+                     +-----------+-----------+
+                                 |
+                     match topic and content type
+                                 |
+                                 v
+                     +-----------------------+
+                     | Bounded dispatch pool |
+                     | isolated subscribers  |
+                     +-----------+-----------+
+                                 |
+                                 v
+                     +-----------------------+
+                     | Plugin handlers       |
+                     | schedule platform work|
+                     | on Paper/Folia as     |
+                     | required              |
+                     +-----------------------+
+
+  CONFIGURATION                                       OPERATIONS
+
+  config.yml ----------------+             +---- /relay status
+  system properties ---------|             +---- /relay subscriptions
+  environment variables -----+--> Relay <--+---- /relay diagnostics
+  secret files --------------+             +---- metrics + logs
+```
+
+Each node subscribes only to the broadcast channel, its platform-role channel, and its own node channel. Relay validates the destination against the channel before decoding and dispatching the typed payload on a bounded worker pool. Delivery is transient and at-most-once: Redis does not retain these messages, so disconnected nodes do not receive them and handlers should remain idempotent.
+
 ## Build
 
 Relay requires Java 25 for the configured Paper 26.2 development bundle.
@@ -91,6 +182,12 @@ relay.publish(
     Destination.broadcast(),
     new PartyUpdated(partyId, "MEMBER_JOINED", playerId));
 
+relay.publish(
+    PARTY_UPDATED,
+    Destination.broadcast(),
+    new PartyUpdated(partyId, "MEMBER_LEFT", playerId),
+    new PublishOptions(previousMessageId, Map.of("trace", traceId)));
+
 Subscription subscription = relay.subscribe(PARTY_UPDATED, message -> {
     // This is a Relay worker, not Paper's server thread.
     partyCache.invalidate(message.payload().partyId());
@@ -112,9 +209,11 @@ The corresponding metric names are:
 - `relay_messages_published_total`
 - `relay_messages_received_total`
 - `relay_messages_rejected_total`
+- `relay_dispatch_queue_drops_total`
 - `relay_handler_failures_total`
 - `relay_redis_reconnects_total`
 - `relay_dispatch_queue_size`
-- `relay_redis_connected`
+- `relay_redis_publisher_connected`
+- `relay_redis_subscriber_connected`
 
 Relay validates envelope schema, topic/node syntax, timestamps, content types, payload size, and bounded headers. Version 1 rejects unknown schemas and stale messages. Durable delivery, request/reply, wildcard routing, player-aware routing, database storage, and workflow scheduling are outside this API; a future Redis Streams implementation should use a separate `DurableMessagingService` contract.

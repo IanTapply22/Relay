@@ -1,15 +1,17 @@
 package com.iantapply.relay.velocity;
 
 import com.iantapply.relay.core.RelayConfig;
+import com.iantapply.relay.core.RelayConfigResolver;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
+import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 final class VelocityConfigLoader {
     private VelocityConfigLoader() {}
@@ -24,68 +26,35 @@ final class VelocityConfigLoader {
             }
         }
         Map<String, String> values = parse(file);
-        String uri = firstNonBlank(
-                System.getProperty("relay.redis.uri"),
-                environment(values.getOrDefault("redis.uri-environment-variable", "RELAY_REDIS_URI")),
-                secretFile(values.get("redis.uri-file"), dataDirectory),
-                values.get("redis.uri"));
-        if (uri == null) throw new IllegalArgumentException("No Redis URI configured");
-        return new RelayConfig(
-                values.getOrDefault("node.id", "velocity-1"),
-                RelayConfig.NodeRole.parse(values.getOrDefault("node.role", "velocity")),
-                URI.create(uri),
-                values.getOrDefault("redis.namespace", "production"),
-                integer(values, "messaging.maximum-payload-bytes", 65_536),
-                integer(values, "messaging.dispatch-workers", 2),
-                integer(values, "messaging.dispatch-queue-capacity", 1_024),
-                Duration.ofSeconds(integer(values, "messaging.reject-messages-older-than-seconds", 60)));
+        return RelayConfigResolver.resolve(values, dataDirectory, "velocity-1", RelayConfig.NodeRole.VELOCITY);
     }
 
     private static Map<String, String> parse(Path file) throws IOException {
-        Map<String, String> values = new HashMap<>();
-        String section = null;
-        for (String rawLine : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-            String withoutComment = rawLine.split("#", 2)[0];
-            if (withoutComment.isBlank()) continue;
-            int indent = withoutComment.length() - withoutComment.stripLeading().length();
-            String line = withoutComment.trim();
-            int separator = line.indexOf(':');
-            if (separator < 0) continue;
-            String key = line.substring(0, separator).trim();
-            String value = line.substring(separator + 1).trim();
-            if (indent == 0 && value.isEmpty()) {
-                section = key;
-                continue;
-            }
-            if (section != null) values.put(section + "." + key, unquote(value));
+        LoaderOptions options = new LoaderOptions();
+        options.setAllowDuplicateKeys(false);
+        Object document;
+        try (Reader reader = Files.newBufferedReader(file)) {
+            document = new Yaml(new SafeConstructor(options)).load(reader);
         }
+        if (!(document instanceof Map<?, ?> root))
+            throw new IllegalArgumentException("Relay config must be a YAML map");
+        Map<String, String> values = new LinkedHashMap<>();
+        flatten("", root, values);
         return values;
     }
 
-    private static String unquote(String value) {
-        if (value.length() >= 2
-                && ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))))
-            return value.substring(1, value.length() - 1);
-        return value;
-    }
-
-    private static int integer(Map<String, String> values, String key, int fallback) {
-        return Integer.parseInt(values.getOrDefault(key, Integer.toString(fallback)));
-    }
-
-    private static String environment(String name) {
-        return name == null || name.isBlank() ? null : System.getenv(name);
-    }
-
-    private static String secretFile(String configuredPath, Path dataDirectory) throws IOException {
-        if (configuredPath == null || configuredPath.isBlank()) return null;
-        Path path = Path.of(configuredPath);
-        if (!path.isAbsolute()) path = dataDirectory.resolve(path).normalize();
-        return Files.readString(path, StandardCharsets.UTF_8).trim();
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String value : values) if (value != null && !value.isBlank()) return value.trim();
-        return null;
+    private static void flatten(String prefix, Map<?, ?> source, Map<String, String> destination) {
+        source.forEach((rawKey, rawValue) -> {
+            if (!(rawKey instanceof String key))
+                throw new IllegalArgumentException("Relay config keys must be strings");
+            String path = prefix.isEmpty() ? key : prefix + "." + key;
+            if (rawValue instanceof Map<?, ?> nested) flatten(path, nested, destination);
+            else if (rawValue == null) destination.put(path, "");
+            else if (rawValue instanceof String || rawValue instanceof Number || rawValue instanceof Boolean) {
+                destination.put(path, String.valueOf(rawValue));
+            } else {
+                throw new IllegalArgumentException("Unsupported Relay config value at " + path);
+            }
+        });
     }
 }

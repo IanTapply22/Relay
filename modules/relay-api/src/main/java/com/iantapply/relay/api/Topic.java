@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  * @param <T> payload type
  */
 public record Topic<T>(String name, MessageCodec<T> codec) {
-    private static final Pattern VALID_NAME = Pattern.compile("[a-z0-9][a-z0-9._:-]{1,127}");
+    private static final Pattern VALID_NAME = Pattern.compile("[a-z0-9][a-z0-9._:-]{0,127}");
 
     /**
      * Validates a topic name and codec.

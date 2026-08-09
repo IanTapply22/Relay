@@ -20,22 +20,36 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
 /** Minimal RESP2 client dedicated to Relay's PUBLISH/SUBSCRIBE use case. */
 public final class RedisPubSubTransport implements MessageTransport {
+    static final int MAXIMUM_RESP_LINE_LENGTH = 4_096;
+    static final int MAXIMUM_RESP_BULK_BYTES = 16 * 1_024 * 1_024;
+    static final int MAXIMUM_RESP_ARRAY_ELEMENTS = 1_024;
+    private static final int CONNECT_TIMEOUT_MILLIS = 3_000;
+    private static final int PUBLISH_READ_TIMEOUT_MILLIS = 3_000;
+
     private final RedisEndpoint endpoint;
     private final Logger logger;
     private final AtomicBoolean open = new AtomicBoolean(true);
-    private final AtomicBoolean connected = new AtomicBoolean();
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final AtomicBoolean subscriberConnected = new AtomicBoolean();
+    private final AtomicBoolean publisherConnected = new AtomicBoolean();
     private final AtomicLong reconnects = new AtomicLong();
     private final ExecutorService publisher;
+    private final Collection<PendingPublication> pendingPublications =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
     private volatile RespConnection publishConnection;
     private volatile RespConnection subscribeConnection;
     private volatile Thread subscriberThread;
@@ -62,28 +76,28 @@ public final class RedisPubSubTransport implements MessageTransport {
     public CompletionStage<Void> publish(String channel, byte[] payload) {
         if (!open.get()) return CompletableFuture.failedFuture(new IllegalStateException("Redis transport is closed"));
         CompletableFuture<Void> result = new CompletableFuture<>();
-        publisher.execute(() -> {
-            try {
-                RespConnection connection = publishConnection;
-                if (connection == null || connection.closed()) {
-                    connection = connect();
-                    publishConnection = connection;
-                }
-                Object response = connection.command(bytes("PUBLISH"), bytes(channel), payload);
-                if (!(response instanceof Long)) throw new IOException("Unexpected PUBLISH response");
-                result.complete(null);
-            } catch (Exception exception) {
-                closeQuietly(publishConnection);
-                publishConnection = null;
-                result.completeExceptionally(new IOException("Redis did not accept the message", exception));
-            }
-        });
+        PendingPublication publication = new PendingPublication(channel, payload.clone(), result);
+        pendingPublications.add(publication);
+        if (!open.get()) {
+            publication.fail(closedException());
+            return result;
+        }
+        try {
+            publisher.execute(publication);
+        } catch (RejectedExecutionException exception) {
+            publication.fail(closedException());
+        }
         return result;
     }
 
     @Override
     public void start(Collection<String> channels, BiConsumer<String, byte[]> receiver) {
-        if (subscriberThread != null) throw new IllegalStateException("Redis transport already started");
+        Objects.requireNonNull(channels, "channels");
+        Objects.requireNonNull(receiver, "receiver");
+        if (channels.isEmpty()) throw new IllegalArgumentException("At least one Redis channel is required");
+        if (!open.get()) throw new IllegalStateException("Redis transport is closed");
+        if (!started.compareAndSet(false, true)) throw new IllegalStateException("Redis transport already started");
+        if (!open.get()) throw new IllegalStateException("Redis transport is closed");
         List<String> subscribedChannels = List.copyOf(channels);
         subscriberThread = new Thread(() -> subscribeLoop(subscribedChannels, receiver), "relay-redis-subscriber");
         subscriberThread.setDaemon(true);
@@ -95,8 +109,12 @@ public final class RedisPubSubTransport implements MessageTransport {
         long delayMillis = 250;
         while (open.get()) {
             try {
-                RespConnection connection = connect();
+                RespConnection connection = connect(true);
                 subscribeConnection = connection;
+                if (!open.get()) {
+                    closeQuietly(connection);
+                    break;
+                }
                 List<byte[]> command = new ArrayList<>();
                 command.add(bytes("SUBSCRIBE"));
                 channels.forEach(channel -> command.add(bytes(channel)));
@@ -104,7 +122,7 @@ public final class RedisPubSubTransport implements MessageTransport {
                 for (int index = 0; index < channels.size(); index++) connection.read();
                 if (connectedBefore) reconnects.incrementAndGet();
                 connectedBefore = true;
-                connected.set(true);
+                subscriberConnected.set(true);
                 delayMillis = 250;
                 while (open.get()) {
                     Object response = connection.read();
@@ -119,7 +137,7 @@ public final class RedisPubSubTransport implements MessageTransport {
                             "Redis subscription disconnected; reconnecting: {0}",
                             exception.getMessage());
             } finally {
-                connected.set(false);
+                subscriberConnected.set(false);
                 closeQuietly(subscribeConnection);
                 subscribeConnection = null;
             }
@@ -134,12 +152,21 @@ public final class RedisPubSubTransport implements MessageTransport {
         }
     }
 
-    private RespConnection connect() throws IOException {
-        Socket socket = endpoint.tls() ? SSLSocketFactory.getDefault().createSocket() : new Socket();
-        socket.connect(new InetSocketAddress(endpoint.host(), endpoint.port()), 3_000);
-        socket.setKeepAlive(true);
-        RespConnection connection = new RespConnection(socket);
+    private RespConnection connect(boolean subscriber) throws IOException {
+        Socket socket;
+        if (endpoint.tls()) {
+            SSLSocket secureSocket = (SSLSocket) SSLSocketFactory.getDefault().createSocket();
+            configureTlsSocket(secureSocket);
+            socket = secureSocket;
+        } else {
+            socket = new Socket();
+        }
         try {
+            socket.connect(new InetSocketAddress(endpoint.host(), endpoint.port()), CONNECT_TIMEOUT_MILLIS);
+            socket.setSoTimeout(PUBLISH_READ_TIMEOUT_MILLIS);
+            socket.setKeepAlive(true);
+            if (socket instanceof SSLSocket secureSocket) secureSocket.startHandshake();
+            RespConnection connection = new RespConnection(socket);
             if (endpoint.password() != null) {
                 Object response = endpoint.username() == null
                         ? connection.command(bytes("AUTH"), bytes(endpoint.password()))
@@ -148,11 +175,22 @@ public final class RedisPubSubTransport implements MessageTransport {
             }
             if (endpoint.database() != 0)
                 requireOk(connection.command(bytes("SELECT"), bytes(Integer.toString(endpoint.database()))), "SELECT");
+            if (subscriber) socket.setSoTimeout(0);
             return connection;
         } catch (IOException exception) {
-            connection.close();
+            try {
+                socket.close();
+            } catch (IOException closeFailure) {
+                exception.addSuppressed(closeFailure);
+            }
             throw exception;
         }
+    }
+
+    static void configureTlsSocket(SSLSocket socket) {
+        SSLParameters parameters = socket.getSSLParameters();
+        parameters.setEndpointIdentificationAlgorithm("HTTPS");
+        socket.setSSLParameters(parameters);
     }
 
     private static void requireOk(Object response, String command) throws IOException {
@@ -161,7 +199,17 @@ public final class RedisPubSubTransport implements MessageTransport {
 
     @Override
     public boolean connected() {
-        return connected.get();
+        return publisherConnected() && subscriberConnected();
+    }
+
+    @Override
+    public boolean publisherConnected() {
+        return publisherConnected.get();
+    }
+
+    @Override
+    public boolean subscriberConnected() {
+        return subscriberConnected.get();
     }
 
     @Override
@@ -172,12 +220,38 @@ public final class RedisPubSubTransport implements MessageTransport {
     @Override
     public void close() {
         if (!open.compareAndSet(true, false)) return;
-        connected.set(false);
+        subscriberConnected.set(false);
+        publisherConnected.set(false);
         closeQuietly(subscribeConnection);
         closeQuietly(publishConnection);
         publisher.shutdownNow();
+        IOException exception = closedException();
+        pendingPublications.forEach(publication -> publication.fail(exception));
         Thread thread = subscriberThread;
         if (thread != null) thread.interrupt();
+        awaitTermination(publisher, "publisher");
+        if (thread != null) {
+            try {
+                thread.join(2_000);
+                if (thread.isAlive()) logger.warning("Relay Redis subscriber did not terminate cleanly");
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private void awaitTermination(ExecutorService executor, String resource) {
+        try {
+            if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+                logger.log(Level.WARNING, "Relay Redis {0} did not terminate cleanly", resource);
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static IOException closedException() {
+        return new IOException("Redis transport is closed");
     }
 
     private static byte[] bytes(String value) {
@@ -230,6 +304,56 @@ public final class RedisPubSubTransport implements MessageTransport {
         }
     }
 
+    private final class PendingPublication implements Runnable {
+        private final String channel;
+        private final byte[] payload;
+        private final CompletableFuture<Void> result;
+
+        private PendingPublication(String channel, byte[] payload, CompletableFuture<Void> result) {
+            this.channel = channel;
+            this.payload = payload;
+            this.result = result;
+        }
+
+        @Override
+        public void run() {
+            if (!open.get()) {
+                fail(closedException());
+                return;
+            }
+            try {
+                RespConnection connection = publishConnection;
+                if (connection == null || connection.closed()) {
+                    connection = connect(false);
+                    publishConnection = connection;
+                }
+                Object response = connection.command(bytes("PUBLISH"), bytes(channel), payload);
+                if (!(response instanceof Long)) throw new IOException("Unexpected PUBLISH response");
+                if (open.get()) {
+                    publisherConnected.set(true);
+                    complete();
+                } else {
+                    fail(closedException());
+                }
+            } catch (Exception exception) {
+                publisherConnected.set(false);
+                closeQuietly(publishConnection);
+                publishConnection = null;
+                fail(new IOException("Redis did not accept the message", exception));
+            }
+        }
+
+        private void complete() {
+            pendingPublications.remove(this);
+            result.complete(null);
+        }
+
+        private void fail(Exception exception) {
+            pendingPublications.remove(this);
+            result.completeExceptionally(exception);
+        }
+    }
+
     private static final class RespConnection implements AutoCloseable {
         private final Socket socket;
         private final InputStream input;
@@ -270,8 +394,9 @@ public final class RedisPubSubTransport implements MessageTransport {
         }
 
         private byte[] bulk() throws IOException {
-            int length = Integer.parseInt(line());
+            int length = integer(line(), "bulk length");
             if (length < 0) return null;
+            if (length > MAXIMUM_RESP_BULK_BYTES) throw new IOException("RESP bulk string exceeds configured limit");
             byte[] value = input.readNBytes(length);
             if (value.length != length || input.read() != '\r' || input.read() != '\n')
                 throw new EOFException("Truncated RESP bulk string");
@@ -279,8 +404,9 @@ public final class RedisPubSubTransport implements MessageTransport {
         }
 
         private List<Object> array() throws IOException {
-            int length = Integer.parseInt(line());
+            int length = integer(line(), "array length");
             if (length < 0) return null;
+            if (length > MAXIMUM_RESP_ARRAY_ELEMENTS) throw new IOException("RESP array exceeds configured limit");
             List<Object> values = new ArrayList<>(length);
             for (int index = 0; index < length; index++) values.add(read());
             return values;
@@ -295,7 +421,17 @@ public final class RedisPubSubTransport implements MessageTransport {
                     if (input.read() != '\n') throw new IOException("Malformed RESP line");
                     return value.toString();
                 }
+                if (value.length() >= MAXIMUM_RESP_LINE_LENGTH)
+                    throw new IOException("RESP line exceeds configured limit");
                 value.append((char) current);
+            }
+        }
+
+        private static int integer(String value, String field) throws IOException {
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException exception) {
+                throw new IOException("Invalid RESP " + field, exception);
             }
         }
 

@@ -7,7 +7,7 @@ dependencies {
     implementation(project(":relay-api"))
     implementation(project(":relay-core"))
     implementation(project(":relay-redis"))
-    paperweight.paperDevBundle("26.2.build.+")
+    paperweight.paperDevBundle("26.2.build.111-stable")
 }
 
 val relayVersion = project.version.toString()

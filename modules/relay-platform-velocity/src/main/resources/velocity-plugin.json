@@ -1,0 +1,9 @@
+{
+  "id": "relay",
+  "name": "Relay",
+  "version": "${version}",
+  "description": "A lightweight Paper/Velocity plugin that supports cross-server message publishing and subscribing built on Redis",
+  "authors": ["Gucci Fox"],
+  "dependencies": [],
+  "main": "com.iantapply.relay.velocity.RelayVelocity"
+}

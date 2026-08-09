@@ -2,11 +2,14 @@ package com.iantapply.relay.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.iantapply.relay.api.Codecs;
 import com.iantapply.relay.api.Destination;
 import com.iantapply.relay.api.MessageCodec;
+import com.iantapply.relay.api.MessageId;
+import com.iantapply.relay.api.PublishOptions;
 import com.iantapply.relay.api.Subscription;
 import com.iantapply.relay.api.Topic;
 import java.net.URI;
@@ -117,9 +120,45 @@ class MessagingContractTest {
                 .toCompletableFuture()
                 .join();
 
-        assertEquals(1, receiver.metrics().messagesRejected());
+        assertEquals(0, receiver.metrics().messagesRejected());
+        assertEquals(1, receiver.metrics().dispatchQueueDrops());
         assertEquals(1, receiver.metrics().dispatchQueueSize());
         release.countDown();
+    }
+
+    @Test
+    void deliversPublishOptions() throws Exception {
+        publisher = service("paper-1", RelayConfig.NodeRole.PAPER);
+        receiver = service("paper-2", RelayConfig.NodeRole.PAPER);
+        Topic<String> topic = Topic.of("options:test", Codecs.utf8());
+        MessageId correlation = MessageId.random();
+        CountDownLatch received = new CountDownLatch(1);
+        receiver.subscribe(topic, message -> {
+            assertEquals(correlation, message.correlationId());
+            assertEquals("trace-1", message.headers().get("trace"));
+            received.countDown();
+        });
+
+        publisher
+                .publish(
+                        topic,
+                        Destination.paperServers(),
+                        "metadata",
+                        new PublishOptions(correlation, java.util.Map.of("trace", "trace-1")))
+                .toCompletableFuture()
+                .join();
+
+        assertTrue(received.await(2, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void rejectsConflictingLocalTopicCodecs() {
+        receiver = service("paper-2", RelayConfig.NodeRole.PAPER);
+        receiver.subscribe(Topic.of("conflict:test", Codecs.utf8()), message -> {});
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> receiver.subscribe(Topic.of("conflict:test", Codecs.bytes()), message -> {}));
     }
 
     @Test
