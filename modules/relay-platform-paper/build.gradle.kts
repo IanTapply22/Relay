@@ -10,9 +10,9 @@ dependencies {
     paperweight.paperDevBundle("26.2.build.+")
 }
 
+val relayVersion = project.version.toString()
+
 tasks.processResources {
-    inputs.property("relayVersion", project.version.toString())
-    filesMatching("paper-plugin.yml") {
-        expand("version" to project.version.toString())
-    }
+    inputs.property("relayVersion", relayVersion)
+    expand("version" to relayVersion)
 }
