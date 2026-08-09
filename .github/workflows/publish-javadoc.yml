@@ -12,15 +12,12 @@ permissions:
 
 concurrency:
   group: javadoc-pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Build and deploy aggregate Javadocs
+  build:
+    name: Build aggregate Javadocs
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -51,11 +48,17 @@ jobs:
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/pages
 
+  deploy:
+    name: Deploy aggregate Javadocs
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy Javadocs
         id: deployment
         uses: actions/deploy-pages@v5
-        with:
-          artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
