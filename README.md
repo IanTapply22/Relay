@@ -259,4 +259,4 @@ Redis Pub/Sub is transient and at-most-once. Keep clocks synchronized, use authe
 
 Contributions are welcome under the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md). Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-Relay is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE.md).
+Relay is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE).
