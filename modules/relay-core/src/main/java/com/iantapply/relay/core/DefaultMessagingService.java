@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/** Default typed messaging implementation backed by a pluggable {@link MessageTransport}. */
 public final class DefaultMessagingService implements MessagingService, AutoCloseable {
     private final RelayConfig config;
     private final MessageTransport transport;
@@ -41,6 +42,13 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
     private final LongAdder handlerFailures = new LongAdder();
     private final AtomicBoolean closed = new AtomicBoolean();
 
+    /**
+     * Starts a messaging service and its transport subscriptions.
+     *
+     * @param config validated node configuration
+     * @param transport transport used for publication and reception
+     * @param logger destination for operational warnings
+     */
     public DefaultMessagingService(RelayConfig config, MessageTransport transport, Logger logger) {
         this.config = Objects.requireNonNull(config, "config");
         this.transport = Objects.requireNonNull(transport, "transport");
@@ -148,6 +156,11 @@ public final class DefaultMessagingService implements MessagingService, AutoClos
                 dispatch.getMaximumPoolSize());
     }
 
+    /**
+     * Returns cumulative operational counters and current transport state.
+     *
+     * @return current metrics snapshot
+     */
     public RelayMetrics metrics() {
         return new RelayMetrics(
                 published.sum(),

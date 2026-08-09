@@ -5,11 +5,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
 
+/** Factory methods for the codecs supplied with Relay. */
 public final class Codecs {
     private static final Gson GSON = new Gson();
 
     private Codecs() {}
 
+    /**
+     * Returns a codec for UTF-8 text.
+     *
+     * @return a UTF-8 string codec
+     */
     public static MessageCodec<String> utf8() {
         return new MessageCodec<>() {
             public byte[] encode(String value) {
@@ -26,6 +32,11 @@ public final class Codecs {
         };
     }
 
+    /**
+     * Returns a codec that defensively copies binary payloads.
+     *
+     * @return a binary codec
+     */
     public static MessageCodec<byte[]> bytes() {
         return new MessageCodec<>() {
             public byte[] encode(byte[] value) {
@@ -38,6 +49,14 @@ public final class Codecs {
         };
     }
 
+    /**
+     * Returns a Gson-backed JSON codec for a concrete value type.
+     *
+     * @param type type to deserialize
+     * @param <T> encoded value type
+     * @return a JSON codec for {@code type}
+     * @throws NullPointerException if {@code type} is {@code null}
+     */
     public static <T> MessageCodec<T> json(Class<T> type) {
         Objects.requireNonNull(type, "type");
         return new MessageCodec<>() {

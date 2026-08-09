@@ -14,20 +14,38 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+/** Encodes, decodes, and validates Relay's JSON wire envelope. */
 public final class EnvelopeCodec {
+    /** Maximum number of application headers accepted in one envelope. */
     public static final int MAXIMUM_HEADERS = 16;
+    /** Maximum length of an application header name. */
     public static final int MAXIMUM_HEADER_KEY_LENGTH = 64;
+    /** Maximum length of an application header value. */
     public static final int MAXIMUM_HEADER_VALUE_LENGTH = 256;
+
     private static final Pattern NODE_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
     private final int maximumPayloadBytes;
     private final Duration maximumAge;
 
+    /**
+     * Creates an envelope codec with inbound and outbound limits.
+     *
+     * @param maximumPayloadBytes largest accepted decoded payload
+     * @param maximumAge maximum accepted message age, or zero to disable age checks
+     */
     public EnvelopeCodec(int maximumPayloadBytes, Duration maximumAge) {
         this.maximumPayloadBytes = maximumPayloadBytes;
         this.maximumAge = maximumAge;
     }
 
+    /**
+     * Validates and serializes an envelope as UTF-8 JSON.
+     *
+     * @param envelope envelope to encode
+     * @return encoded wire payload
+     * @throws IllegalArgumentException if the envelope violates the wire contract
+     */
     public byte[] encode(WireEnvelope envelope) {
         validate(envelope, Instant.now());
         JsonObject root = new JsonObject();
@@ -47,6 +65,14 @@ public final class EnvelopeCodec {
         return root.toString().getBytes(StandardCharsets.UTF_8);
     }
 
+    /**
+     * Deserializes and validates an envelope relative to the supplied clock value.
+     *
+     * @param encoded UTF-8 JSON envelope
+     * @param now reference time used for age validation
+     * @return decoded envelope
+     * @throws IllegalArgumentException if the input is malformed or violates the wire contract
+     */
     public WireEnvelope decode(byte[] encoded, Instant now) {
         try {
             JsonObject root = JsonParser.parseString(new String(encoded, StandardCharsets.UTF_8))

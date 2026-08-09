@@ -14,6 +14,10 @@ public final class InMemoryTransport implements MessageTransport {
     private volatile BiConsumer<String, byte[]> receiver;
     private volatile boolean open;
 
+    /** Creates a disconnected in-memory transport. */
+    public InMemoryTransport() {}
+
+    @Override
     public CompletionStage<Void> publish(String channel, byte[] payload) {
         if (!open) return CompletableFuture.failedFuture(new IllegalStateException("Transport is disconnected"));
         for (InMemoryTransport transport : INSTANCES) {
@@ -24,6 +28,7 @@ public final class InMemoryTransport implements MessageTransport {
         return CompletableFuture.completedFuture(null);
     }
 
+    @Override
     public void start(Collection<String> channels, BiConsumer<String, byte[]> receiver) {
         this.channels = Set.copyOf(channels);
         this.receiver = receiver;
@@ -31,14 +36,17 @@ public final class InMemoryTransport implements MessageTransport {
         INSTANCES.add(this);
     }
 
+    @Override
     public boolean connected() {
         return open;
     }
 
+    @Override
     public long reconnects() {
         return 0;
     }
 
+    @Override
     public void close() {
         open = false;
         INSTANCES.remove(this);

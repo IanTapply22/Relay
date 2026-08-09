@@ -6,6 +6,18 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+/**
+ * Validated runtime configuration shared by Relay's platform adapters and core.
+ *
+ * @param nodeId unique identifier for this server or proxy
+ * @param role platform role of this node
+ * @param redisUri Redis connection URI using {@code redis} or {@code rediss}
+ * @param namespace logical Redis channel namespace
+ * @param maximumPayloadBytes largest accepted decoded payload
+ * @param dispatchWorkers number of concurrent handler workers
+ * @param dispatchQueueCapacity maximum number of queued handler invocations
+ * @param maximumMessageAge maximum accepted message age, or zero to disable the check
+ */
 public record RelayConfig(
         String nodeId,
         NodeRole role,
@@ -18,19 +30,46 @@ public record RelayConfig(
     private static final Pattern NODE = Pattern.compile("[A-Za-z0-9._-]{1,64}");
     private static final Pattern NAMESPACE = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
+    /** Platform roles understood by Relay routing. */
     public enum NodeRole {
+        /** Paper game server. */
         PAPER,
+        /** Velocity proxy. */
         VELOCITY;
 
+        /**
+         * Parses a case-insensitive role name.
+         *
+         * @param value role name
+         * @return parsed role
+         * @throws IllegalArgumentException if the name is unknown
+         */
         public static NodeRole parse(String value) {
             return valueOf(value.trim().toUpperCase(Locale.ROOT));
         }
 
+        /**
+         * Returns the lower-case name used in transport channels.
+         *
+         * @return channel role name
+         */
         public String channelName() {
             return name().toLowerCase(Locale.ROOT);
         }
     }
 
+    /**
+     * Validates all runtime settings.
+     *
+     * @param nodeId unique identifier for this server or proxy
+     * @param role platform role of this node
+     * @param redisUri Redis connection URI
+     * @param namespace logical Redis channel namespace
+     * @param maximumPayloadBytes largest accepted decoded payload
+     * @param dispatchWorkers number of concurrent handler workers
+     * @param dispatchQueueCapacity maximum queued handler invocations
+     * @param maximumMessageAge maximum accepted message age
+     */
     public RelayConfig {
         Objects.requireNonNull(nodeId, "nodeId");
         Objects.requireNonNull(role, "role");

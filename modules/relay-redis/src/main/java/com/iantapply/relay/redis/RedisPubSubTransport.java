@@ -40,6 +40,13 @@ public final class RedisPubSubTransport implements MessageTransport {
     private volatile RespConnection subscribeConnection;
     private volatile Thread subscriberThread;
 
+    /**
+     * Creates a Redis transport for one endpoint.
+     *
+     * @param uri Redis endpoint, credentials, database, and optional TLS scheme
+     * @param logger destination for connection warnings
+     * @throws IllegalArgumentException if the URI is not a valid Redis endpoint
+     */
     public RedisPubSubTransport(URI uri, Logger logger) {
         this.endpoint = RedisEndpoint.parse(uri);
         this.logger = Objects.requireNonNull(logger, "logger");

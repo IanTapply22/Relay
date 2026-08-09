@@ -12,8 +12,12 @@ import java.util.List;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/** Paper entry point that exposes Relay through Bukkit's service registry. */
 public final class Relay extends JavaPlugin {
     private DefaultMessagingService messaging;
+
+    /** Creates the Paper plugin entry point. */
+    public Relay() {}
 
     @Override
     public void onEnable() {

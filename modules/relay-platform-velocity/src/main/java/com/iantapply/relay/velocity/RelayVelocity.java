@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.concurrent.CompletionStage;
 import java.util.logging.Logger;
 
+/** Velocity entry point and platform-facing {@link MessagingService} implementation. */
 @Plugin(
         id = "relay",
         name = "Relay",
@@ -33,6 +34,13 @@ public final class RelayVelocity implements MessagingService {
     private final Path dataDirectory;
     private volatile DefaultMessagingService messaging;
 
+    /**
+     * Creates the Velocity plugin instance through dependency injection.
+     *
+     * @param proxy active Velocity proxy
+     * @param logger platform logger
+     * @param dataDirectory plugin data directory
+     */
     @Inject
     public RelayVelocity(ProxyServer proxy, org.slf4j.Logger logger, @DataDirectory Path dataDirectory) {
         this.proxy = proxy;
@@ -40,6 +48,11 @@ public final class RelayVelocity implements MessagingService {
         this.dataDirectory = dataDirectory;
     }
 
+    /**
+     * Starts Relay after Velocity initializes its plugins.
+     *
+     * @param event initialization event
+     */
     @Subscribe
     public void initialize(ProxyInitializeEvent event) {
         try {
@@ -63,6 +76,11 @@ public final class RelayVelocity implements MessagingService {
         }
     }
 
+    /**
+     * Releases Relay resources during proxy shutdown.
+     *
+     * @param event shutdown event
+     */
     @Subscribe
     public void shutdown(ProxyShutdownEvent event) {
         DefaultMessagingService current = messaging;

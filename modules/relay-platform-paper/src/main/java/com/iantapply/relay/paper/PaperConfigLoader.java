@@ -10,9 +10,19 @@ import java.time.Duration;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/** Loads and validates Relay configuration from a Paper plugin's data directory. */
 public final class PaperConfigLoader {
     private PaperConfigLoader() {}
 
+    /**
+     * Ensures the default configuration exists and resolves the effective Relay settings.
+     * Redis URI sources are checked in system-property, environment, secret-file, then YAML order.
+     *
+     * @param plugin owning Paper plugin
+     * @return validated Relay configuration
+     * @throws IOException if a configuration resource or secret file cannot be read
+     * @throws IllegalArgumentException if the resolved configuration is invalid
+     */
     public static RelayConfig load(JavaPlugin plugin) throws IOException {
         plugin.saveDefaultConfig();
         plugin.reloadConfig();
