@@ -62,7 +62,7 @@ jobs:
           sha256sum "$artifact" > "$artifact.sha256"
 
       - name: Attest plugin artifact
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: build/libs/Relay-${{ env.RELAY_VERSION }}.jar
 
