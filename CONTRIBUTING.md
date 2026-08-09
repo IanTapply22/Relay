@@ -6,8 +6,9 @@ Thank you for improving Relay. Keep changes focused, testable, and compatible wi
 
 1. Install JDK 25. The build uses a Java toolchain, but running Gradle with JDK 25 most closely matches CI.
 2. Clone the repository and use the checked-in Gradle wrapper.
-3. Run `./gradlew check javadoc jar` (`.\gradlew.bat` on Windows) before submitting a change.
-4. Use `./gradlew runServer` when a local Paper environment is useful.
+3. Run `./gradlew installGitHooks` (`.\gradlew.bat installGitHooks` on Windows) to enable the tracked pre-commit hook.
+4. Run `./gradlew check javadoc jar` (`.\gradlew.bat` on Windows) before submitting a change.
+5. Use `./gradlew runServer` when a local Paper environment is useful.
 
 The Redis tests use local protocol fixtures and do not require a separately installed Redis server.
 
@@ -23,6 +24,8 @@ The Redis tests use local protocol fixtures and do not require a separately inst
 - Do not commit credentials, local server files, build output, Gradle caches, or IDE metadata.
 
 Use `./gradlew lintFix` to format source and project files. Avoid unrelated formatting or refactoring in the same pull request.
+
+The pre-commit hook runs `spotlessApply` and re-stages files that were already part of the commit, ensuring formatter changes are included without staging unrelated working-tree changes.
 
 ## Testing
 
